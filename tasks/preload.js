@@ -192,6 +192,7 @@ module.exports = function (grunt) {
 						return;
 					}
 
+					var destPath = options.dest;
 					var iPreloadOriginalSize = 0, iPreloadCompressedSize = 0;
 
 					preloadFiles.forEach(function(preloadFile) {
@@ -199,7 +200,7 @@ module.exports = function (grunt) {
 						var fileName = resourceMap[preloadFile].fullPath;
 						var fileContent = grunt.file.read(fileName);
 						var fileExtension = path.extname(fileName);
-						
+
 						var iOriginalSize, iCompressedSize;
 
 						if (options.compress) {
@@ -210,13 +211,25 @@ module.exports = function (grunt) {
 							switch (fileExtension) {
 							case '.js':
 								// Javascript files are processed by Uglify
-								fileContent = uglify.minify(fileContent, {
+								var input = {};
+								input[preloadFile] = fileContent;
+
+								var uglifyOptions = {
 									fromString: true,
 									warnings: grunt.option('verbose') === true,
 									output: {
 										comments: copyrightCommentsPattern
 									}
-								}).code;
+								};
+
+								if (options.sourceMaps) {
+									uglifyOptions.sourceMapIncludeSources = true;
+									uglifyOptions.outSourceMap = path.join(options.sourceMaps.prefix || '', preloadFile + '.map').replace(/\\/g, '/');
+								}
+
+								var minifiyResult = uglify.minify(input, uglifyOptions);
+								fileContent = minifiyResult.code;
+								grunt.file.write(path.join(fileName + '.map'), minifiyResult.map);
 								break;
 							case '.json':
 								// JSON is parsed and written to string again to remove unwanted white space
@@ -254,7 +267,6 @@ module.exports = function (grunt) {
 						content = preloadInfo.processContent(content);
 					}
 
-					var destPath = options.dest;
 					var preloadResourceInfo = resourceMap[preloadFile];
 					if (preloadModuleName.indexOf(preloadResourceInfo.prefix) === 0) {
 						destPath = path.join(destPath, preloadModuleName.substr(preloadResourceInfo.prefix.length));
